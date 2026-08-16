@@ -1,0 +1,73 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ts-coder"
+version = "0.1.0"
+description = "TypeScript-only language model trained from random initialization"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+license = { file = "LICENSE" }
+dependencies = [
+  "numpy==2.2.6",
+  "pyarrow==23.0.1",
+  "PyYAML==6.0.2",
+  "tokenizers==0.21.1",
+  "torch==2.7.1",
+]
+
+# The development slice is CPU-first. Keeping the explicit CPU index avoids silently
+# pulling several gigabytes of CUDA runtime libraries on hosts without a GPU. CUDA
+# users may override this source in a local, uncommitted configuration.
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[project.optional-dependencies]
+dev = [
+  "bandit==1.8.3",
+  "mypy==1.16.0",
+  "pip-audit==2.9.0",
+  "pytest==9.0.3",
+  "pytest-cov==6.1.1",
+  "ruff==0.11.13",
+]
+
+[project.scripts]
+ts-coder = "ts_coder.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ts_coder"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "S"]
+ignore = ["S105", "S106", "S311", "S603", "S607", "UP017", "UP035", "UP038"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101", "S105", "E501", "E701", "E702", "I001"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+disallow_any_generics = false
+warn_return_any = false
+disable_error_code = ["import-untyped", "var-annotated", "arg-type", "return-value", "union-attr"]
+packages = ["ts_coder"]
+mypy_path = "src"
+
+[tool.bandit]
+exclude_dirs = ["tests", "fixtures"]

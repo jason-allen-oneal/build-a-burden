@@ -1,0 +1,16 @@
+schema_version: 1
+name: ts-coder-100m
+vocab_size: 32768
+context_length: 4096
+layers: 12
+hidden_size: 768
+attention_heads: 12
+kv_heads: 4
+ffn_size: 2048
+normalization: rmsnorm
+position_encoding: rope
+activation: swiglu
+tied_embeddings: true
+dropout: 0.0
+use_sdpa: true
+training_tokens: 3000000000

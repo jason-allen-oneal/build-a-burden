@@ -1,0 +1,16 @@
+schema_version: 1
+name: ts-coder-300m-approved
+vocab_size: 32768
+context_length: 4096
+layers: 24
+hidden_size: 1024
+attention_heads: 16
+kv_heads: 4
+ffn_size: 2816
+normalization: rmsnorm
+position_encoding: rope
+activation: swiglu
+tied_embeddings: true
+dropout: 0.0
+use_sdpa: true
+gradient_checkpointing: true

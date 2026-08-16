@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "scope": "project-held-out-fim-fixtures",
+  "tasks": [
+    {
+      "id": "fim-clamp-number",
+      "filename": "clamp.ts",
+      "prefix": "export function clamp(value: number, minimum: number, maximum: number): number {\n",
+      "suffix": "}\n",
+      "middle": "  return Math.max(minimum, Math.min(value, maximum));\n",
+      "max_new_tokens": 64
+    },
+    {
+      "id": "fim-interface-format",
+      "filename": "format.ts",
+      "prefix": "interface AccountSummary {\n  id: string;\n  active: boolean;\n}\n\nexport function formatAccount(account: AccountSummary): string {\n",
+      "suffix": "}\n",
+      "middle": "  return `${account.id}:${account.active ? \"active\" : \"inactive\"}`;\n",
+      "max_new_tokens": 64
+    },
+    {
+      "id": "fim-class-counter",
+      "filename": "counter.ts",
+      "prefix": "export class Counter {\n  private value = 0;\n\n  increment(): number {\n",
+      "suffix": "  }\n}\n",
+      "middle": "    return ++this.value;\n",
+      "max_new_tokens": 48
+    },
+    {
+      "id": "fim-async-result",
+      "filename": "lookup.ts",
+      "prefix": "export async function lookupLabel(id: string): Promise<string> {\n  const normalized = id.trim();\n",
+      "suffix": "}\n",
+      "middle": "  return normalized;\n",
+      "max_new_tokens": 48
+    },
+    {
+      "id": "fim-tsx-badge",
+      "filename": "Badge.tsx",
+      "prefix": "type BadgeProps = { label: string; selected: boolean };\n\nexport function Badge({ label, selected }: BadgeProps) {\n",
+      "suffix": "}\n",
+      "middle": "  return <span className={selected ? \"selected\" : \"plain\"}>{label}</span>;\n",
+      "max_new_tokens": 96
+    }
+  ]
+}

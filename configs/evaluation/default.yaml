@@ -1,0 +1,10 @@
+schema_version: 1
+seed: 42
+manifest: manifests/dev.jsonl
+split: test
+max_new_tokens: 128
+generation: {temperature: 0.0, top_k: 0, top_p: 1.0, use_kv_cache: true}
+metrics: [cross_entropy, perplexity, fim_exact_match, fim_token_accuracy, syntax_parse_rate, compilation_rate, diagnostic_count, generation_length, repetition_rate, exact_training_match_rate, longest_matching_span, tokens_per_second, peak_memory, deterministic_generation]
+typescript_tool: tools/typescript
+compile_timeout_seconds: 10
+output: artifacts/evaluations/dev.json

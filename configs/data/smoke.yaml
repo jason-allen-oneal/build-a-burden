@@ -1,0 +1,10 @@
+schema_version: 1
+seed: 42
+sources: []
+allowed_extensions: [.ts, .tsx, .d.ts]
+accepted_licenses: [MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, Unlicense]
+output_manifest: manifests/smoke.jsonl
+output_corpus: artifacts/corpus/smoke
+max_file_bytes: 1048576
+splits: {train: 0.90, validation: 0.05, test: 0.05}
+near_duplicate_threshold: 0.90

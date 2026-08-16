@@ -1,0 +1,16 @@
+{
+  "name": "ts-coder-typescript-tools",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Pinned, machine-readable TypeScript parse and compile helpers for ts-coder evaluation",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "typescript": "5.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.10"
+  }
+}

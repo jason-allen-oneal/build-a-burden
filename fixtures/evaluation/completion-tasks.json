@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "scope": "project-held-out-fixtures",
+  "tasks": [
+    {
+      "id": "clamp-number",
+      "filename": "clamp.ts",
+      "prompt": "export function clamp(value: number, minimum: number, maximum: number): number {\n",
+      "max_new_tokens": 48
+    },
+    {
+      "id": "interface-format",
+      "filename": "format.ts",
+      "prompt": "interface AccountSummary {\n  id: string;\n  active: boolean;\n}\n\nexport function formatAccount(account: AccountSummary): string {\n",
+      "max_new_tokens": 48
+    },
+    {
+      "id": "class-counter",
+      "filename": "counter.ts",
+      "prompt": "export class Counter {\n  private value = 0;\n\n  increment(): number {\n",
+      "max_new_tokens": 48
+    },
+    {
+      "id": "async-result",
+      "filename": "lookup.ts",
+      "prompt": "export async function lookupLabel(id: string): Promise<string> {\n  const normalized = id.trim();\n",
+      "max_new_tokens": 48
+    },
+    {
+      "id": "tsx-badge",
+      "filename": "Badge.tsx",
+      "prompt": "type BadgeProps = { label: string; selected: boolean };\n\nexport function Badge({ label, selected }: BadgeProps) {\n",
+      "max_new_tokens": 64
+    }
+  ]
+}

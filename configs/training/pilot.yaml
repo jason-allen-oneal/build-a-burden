@@ -1,0 +1,24 @@
+schema_version: 1
+run_name: pilot-100m
+model_config: configs/model/pilot-100m.yaml
+tokenizer_dir: artifacts/tokenizers/production
+manifest: manifests/approved-pilot.jsonl
+output_root: artifacts/runs
+seed: 42
+device: cuda
+precision: bf16
+sequence_length: 4096
+micro_batch_size: 1
+gradient_accumulation_steps: 64
+max_tokens: 3000000000
+optimizer: {name: adamw, learning_rate: 0.0003, betas: [0.9, 0.95], weight_decay: 0.1}
+scheduler: {name: cosine, warmup_tokens: 30000000, minimum_learning_rate_ratio: 0.1}
+gradient_clip_norm: 1.0
+objectives: {causal_fraction: 0.50, fim_fraction: 0.50, fim_min_span: 8, fim_max_span: 1024}
+validation_interval_tokens: 5000000
+checkpoint_interval_tokens: 25000000
+sample_interval_tokens: 5000000
+# Planning contract only. The current CLI rejects non-single strategies until
+# process-group setup, rank-aware checkpoints, and distributed reductions land.
+distributed: {strategy: ddp, backend: nccl, world_size: 8, rank: 0, local_rank: 0, timeout_seconds: 1800, data_partition: stable_record_hash}
+approval_required: true

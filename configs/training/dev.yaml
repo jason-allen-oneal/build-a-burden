@@ -1,0 +1,20 @@
+schema_version: 1
+run_name: dev
+model_config: configs/model/dev.yaml
+tokenizer_dir: artifacts/tokenizers/dev
+manifest: manifests/dev.jsonl
+output_root: artifacts/runs
+seed: 42
+device: auto
+precision: fp32
+sequence_length: 128
+micro_batch_size: 2
+gradient_accumulation_steps: 1
+max_tokens: 32768
+optimizer: {name: adamw, learning_rate: 0.001, betas: [0.9, 0.95], weight_decay: 0.1}
+scheduler: {name: cosine, warmup_tokens: 2048, minimum_learning_rate_ratio: 0.1}
+gradient_clip_norm: 1.0
+objectives: {causal_fraction: 0.50, fim_fraction: 0.50, fim_min_span: 4, fim_max_span: 64}
+validation_interval_tokens: 4096
+checkpoint_interval_tokens: 8192
+sample_interval_tokens: 4096

@@ -1,0 +1,9 @@
+schema_version: 1
+type: byte_level_bpe
+vocab_size: 32768
+min_frequency: 2
+seed: 42
+corpus_manifest: manifests/approved.jsonl
+corpus_artifact: artifacts/corpus/approved/documents.jsonl
+output_dir: artifacts/tokenizers/approved-32k-v2
+special_tokens: [<pad>, <bos>, <eos>, <unk>, <repo>, </repo>, <file>, </file>, <fim_prefix>, <fim_suffix>, <fim_middle>, <diagnostic>, </diagnostic>, <test>, </test>, <patch>, </patch>]

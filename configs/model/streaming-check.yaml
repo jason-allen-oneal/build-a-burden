@@ -1,0 +1,16 @@
+schema_version: 1
+name: ts-coder-streaming-check
+vocab_size: 32768
+context_length: 128
+layers: 2
+hidden_size: 128
+attention_heads: 4
+kv_heads: 2
+ffn_size: 384
+normalization: rmsnorm
+position_encoding: rope
+activation: swiglu
+tied_embeddings: true
+dropout: 0.0
+use_sdpa: true
+gradient_checkpointing: false

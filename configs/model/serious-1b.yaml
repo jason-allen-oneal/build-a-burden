@@ -1,0 +1,20 @@
+schema_version: 1
+name: ts-coder-serious-1b-planning
+planning_only: true
+minimum_parameters: 1000000000
+architecture:
+  vocab_size: 32768
+  context_length: 8192
+  layers: 24
+  hidden_size: 2048
+  attention_heads: 16
+  kv_heads: 4
+  ffn_size: 5504
+  normalization: rmsnorm
+  position_encoding: rope
+  activation: swiglu
+  tied_embeddings: true
+  parameter_count_estimate: 1130465280
+  hardware_contract: single-a100-80gb-with-checkpointing-or-multi-gpu
+  gradient_checkpointing: true
+requires_recalculation: [compute_budget, corpus_size, token_budget, memory_budget, context_length, scaling_results]

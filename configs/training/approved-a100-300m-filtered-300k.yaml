@@ -1,0 +1,29 @@
+schema_version: 1
+run_name: approved-a100-300m-filtered-300k
+model_config: configs/model/approved-300m.yaml
+tokenizer_dir: artifacts/tokenizers/approved-32k-v2
+manifest: manifests/approved.jsonl
+corpus_artifact: artifacts/corpus/approved/documents.jsonl
+shard_manifest: artifacts/corpus/approved/shards-approved-v2.json
+output_root: artifacts/runs
+seed: 42
+device: cuda
+precision: bf16
+sequence_length: 4096
+micro_batch_size: 1
+gradient_accumulation_steps: 1
+max_tokens: 300000
+optimizer: {name: adamw, learning_rate: 0.0003, betas: [0.9, 0.95], weight_decay: 0.1}
+scheduler: {name: cosine, warmup_tokens: 50000, minimum_learning_rate_ratio: 0.1}
+gradient_clip_norm: 1.0
+objectives: {causal_fraction: 0.50, fim_fraction: 0.50, fim_min_span: 8, fim_max_span: 1024}
+validation_interval_tokens: 100000
+validation_max_tokens: 16384
+checkpoint_interval_tokens: 100000
+sample_interval_tokens: 100000
+streaming_tokens_per_step_estimate: 4096
+streaming: true
+packed_streaming: true
+exclude_compiler_harness: true
+max_line_bytes: 16777216
+approval_required: true

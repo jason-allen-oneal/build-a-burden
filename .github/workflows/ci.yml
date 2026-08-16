@@ -1,0 +1,50 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tools/typescript/package-lock.json
+      - name: Reject tracked generated artifacts
+        run: |
+          if git ls-files | grep -P '(^artifacts/(?!\.gitkeep$)|^manifests/(?!\.gitkeep$)|(^|/)(node_modules|dist)/)'; then
+            echo "Generated artifacts must not be tracked"
+            exit 1
+          fi
+      - name: Install locked Python dependencies
+        run: uv sync --all-extras --locked
+      - name: Install locked Node dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+        working-directory: tools/typescript
+      - name: Lint and type-check Python
+        run: make lint && uv run mypy
+      - name: Build and type-check TypeScript helpers
+        run: npm run build && npm run typecheck
+        working-directory: tools/typescript
+      - name: Test
+        run: uv run pytest
+      - name: Scan Python dependencies
+        run: uv run pip-audit
+      - name: Scan Python source
+        run: uv run bandit -c pyproject.toml -r src
+      - name: Scan repository for secrets
+        uses: gitleaks/gitleaks-action@v2

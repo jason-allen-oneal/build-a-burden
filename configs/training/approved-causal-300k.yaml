@@ -1,0 +1,21 @@
+schema_version: 1
+run_name: approved-causal-300k
+model_config: configs/model/approved-dev.yaml
+tokenizer_dir: artifacts/tokenizers/approved-pilot
+manifest: manifests/approved.jsonl
+corpus_artifact: artifacts/corpus/approved/documents.jsonl
+output_root: artifacts/runs
+seed: 42
+device: cpu
+precision: fp32
+sequence_length: 128
+micro_batch_size: 1
+gradient_accumulation_steps: 1
+max_tokens: 300000
+optimizer: {name: adamw, learning_rate: 0.001, betas: [0.9, 0.95], weight_decay: 0.1}
+scheduler: {name: cosine, warmup_tokens: 20000, minimum_learning_rate_ratio: 0.1}
+gradient_clip_norm: 1.0
+objectives: {causal_fraction: 1.0, fim_fraction: 0.0, fim_min_span: 4, fim_max_span: 64}
+validation_interval_tokens: 100000
+checkpoint_interval_tokens: 100000
+sample_interval_tokens: 100000

@@ -1,0 +1,68 @@
+schema_version: 1
+seed: 42
+# These paths are immutable, ignored snapshots produced only by `corpus acquire`
+# after an exact approval-ledger match. Repository code is never executed.
+sources:
+  - path: artifacts/sources/colinhacks-zod/4e1720c80e65a6f2c8d1f9fc9da0ba3a1a4c9d86
+    receipt: artifacts/sources/colinhacks-zod/4e1720c80e65a6f2c8d1f9fc9da0ba3a1a4c9d86.receipt.json
+    source_id: colinhacks-zod
+    source_uri: https://github.com/colinhacks/zod
+    commit_sha: 4e1720c80e65a6f2c8d1f9fc9da0ba3a1a4c9d86
+  - path: artifacts/sources/vitejs-vite/dcf88bd2ad2b1a8845f9029587cc8c825e382d42
+    receipt: artifacts/sources/vitejs-vite/dcf88bd2ad2b1a8845f9029587cc8c825e382d42.receipt.json
+    source_id: vitejs-vite
+    source_uri: https://github.com/vitejs/vite
+    commit_sha: dcf88bd2ad2b1a8845f9029587cc8c825e382d42
+  - path: artifacts/sources/nestjs-nest/09dba60ce8dd47f9e6c518a86e2ac3cefdb6d68f
+    receipt: artifacts/sources/nestjs-nest/09dba60ce8dd47f9e6c518a86e2ac3cefdb6d68f.receipt.json
+    source_id: nestjs-nest
+    source_uri: https://github.com/nestjs/nest
+    commit_sha: 09dba60ce8dd47f9e6c518a86e2ac3cefdb6d68f
+  - path: artifacts/sources/typescript-eslint-typescript-eslint/b3f0cceee7b1d68f967253abc317f1b1b28fe4c8
+    receipt: artifacts/sources/typescript-eslint-typescript-eslint/b3f0cceee7b1d68f967253abc317f1b1b28fe4c8.receipt.json
+    source_id: typescript-eslint-typescript-eslint
+    source_uri: https://github.com/typescript-eslint/typescript-eslint
+    commit_sha: b3f0cceee7b1d68f967253abc317f1b1b28fe4c8
+  - path: artifacts/sources/typeorm-typeorm/df07bf1ef46f62f72077699fe4cd2c03b2f666e4
+    receipt: artifacts/sources/typeorm-typeorm/df07bf1ef46f62f72077699fe4cd2c03b2f666e4.receipt.json
+    source_id: typeorm-typeorm
+    source_uri: https://github.com/typeorm/typeorm
+    commit_sha: df07bf1ef46f62f72077699fe4cd2c03b2f666e4
+  - path: artifacts/sources/reduxjs-redux-toolkit/74200d87c27ca2b1c0915b2fbb4c44dd7494c2aa
+    receipt: artifacts/sources/reduxjs-redux-toolkit/74200d87c27ca2b1c0915b2fbb4c44dd7494c2aa.receipt.json
+    source_id: reduxjs-redux-toolkit
+    source_uri: https://github.com/reduxjs/redux-toolkit
+    commit_sha: 74200d87c27ca2b1c0915b2fbb4c44dd7494c2aa
+  - path: artifacts/sources/microsoft-typescript/b465fdbfe175304d9b977da137b2c178ae1091d3
+    receipt: artifacts/sources/microsoft-typescript/b465fdbfe175304d9b977da137b2c178ae1091d3.receipt.json
+    source_id: microsoft-typescript
+    source_uri: https://github.com/microsoft/TypeScript
+    commit_sha: b465fdbfe175304d9b977da137b2c178ae1091d3
+approval_manifest: manifests/approved-sources.jsonl
+approval_manifest_sha256: 16255e0f6a517b66675788aee6e79f39e780a6330cea7bbd714b1f150e93e765
+require_approval: true
+acquisition_root: artifacts/sources
+acquisition_timeout_seconds: 180
+# The compiler repository contains a few large checked-in fixtures.  Keep the
+# per-file ceiling bounded below the 64 MiB hard safety limit while allowing
+# the approved source to be inventoried without a checkout.
+acquisition_max_file_bytes: 67108864
+# The TypeScript compiler snapshot has a large tracked tree.  This is still a
+# hard bounded inventory; the aggregate byte and per-file ceilings remain the
+# primary disk guard.
+acquisition_max_files: 100000
+# Whole-snapshot ceiling for the controlled compiler intake.  The approval
+# scope and downstream corpus filter still exclude generated/vendor material.
+acquisition_max_total_bytes: 1000000000
+acquisition_max_path_depth: 32
+allowed_extensions: [.ts, .tsx, .d.ts]
+accepted_licenses: [MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, Unlicense]
+output_manifest: manifests/approved.jsonl
+output_corpus: artifacts/corpus/approved
+append_manifest: false
+max_file_bytes: 1048576
+max_files: 100000
+max_total_bytes: 1000000000
+max_path_depth: 32
+splits: {train: 0.90, validation: 0.05, test: 0.05}
+near_duplicate_threshold: 0.90
