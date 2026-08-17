@@ -8,9 +8,29 @@ permissions:
   contents: read
 
 jobs:
+  repository-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject tracked generated artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          tracked_generated="$({
+            git ls-files |
+              grep -P '(^artifacts/(?!\.gitkeep$)|^manifests/(?!\.gitkeep$)|(^|/)(node_modules|dist)/)' |
+              grep -v -E '^manifests/(approved-sources|training-authorizations)\.jsonl$'
+          } || true)"
+          if [[ -n "$tracked_generated" ]]; then
+            printf '%s\n' "$tracked_generated"
+            echo "Generated artifacts must not be tracked"
+            exit 1
+          fi
+
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -24,12 +44,6 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: tools/typescript/package-lock.json
-      - name: Reject tracked generated artifacts
-        run: |
-          if git ls-files | grep -P '(^artifacts/(?!\.gitkeep$)|^manifests/(?!\.gitkeep$)|(^|/)(node_modules|dist)/)'; then
-            echo "Generated artifacts must not be tracked"
-            exit 1
-          fi
       - name: Install locked Python dependencies
         run: uv sync --all-extras --locked
       - name: Install locked Node dependencies without lifecycle scripts

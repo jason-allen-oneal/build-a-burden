@@ -13,6 +13,7 @@ artifacts/**
 manifests/**
 !manifests/.gitkeep
 !manifests/approved-sources.jsonl
+!manifests/training-authorizations.jsonl
 *.safetensors
 *.pt
 *.pth
