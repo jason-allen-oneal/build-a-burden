@@ -51,13 +51,14 @@ def evaluate_sources(
     if compute_longest_matching_span:
         for source in sources:
             source_length = len(source)
-            candidates = sorted(
-                reference,
-                key=lambda item, expected_length=source_length: (
-                    abs(len(item) - expected_length),
+
+            def candidate_rank(item: str) -> tuple[int, bytes]:
+                return (
+                    abs(len(item) - source_length),
                     hashlib.sha256(item.encode()).digest(),
-                ),
-            )[:16]
+                )
+
+            candidates = sorted(reference, key=candidate_rank)[:16]
             longest = max(
                 longest,
                 max(
