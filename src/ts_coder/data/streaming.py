@@ -1,19 +1,4 @@
-"""Streaming document-shard contracts for scale-out training.
-
-The milestone-1 trainer materializes a small list of examples.  That is useful
-for correctness tests, but it cannot be the data interface for a serious run:
-the whole corpus must not be resident in one process and a worker must be able
-to resume from a reproducible position.  This module intentionally contains no
-framework-specific dataloader.  It defines the portable, auditable contract
-that a future single-process, DDP, or FSDP loader can implement.
-
-Shard files are newline-delimited JSON records.  The iterator reads one line at
-a time, validates the small envelope, and exposes a line offset as the resume
-position.  Partitioning is by a stable record-id hash, not process-local order,
-so changing worker count does not silently change which examples are seen by a
-given global stream.  A future launcher may replace hash partitioning with a
-coordinated sampler, but it must preserve the cursor and manifest contracts.
-"""
+"""Streaming document-shard contracts for scale-out training."""
 
 from __future__ import annotations
 
@@ -141,25 +126,14 @@ class ShardManifest:
             raise ValueError("each shard descriptor must be a mapping")
         manifest = cls(shards, value["tokenizer_hash"], value["source_manifest_hash"])
         for field in ("records", "tokens"):
-            if field not in value:
-                continue
-            expected = getattr(manifest, field)
-            if value[field] != expected:
+            if field in value and value[field] != getattr(manifest, field):
                 raise ValueError(f"shard manifest {field} total does not match descriptors")
         return manifest
 
 
 @dataclass(frozen=True)
 class DataCursor:
-    """Portable resume position for a partitioned shard stream.
-
-    ``record_offset`` is the next zero-based JSONL line to inspect within
-    ``shard_index``.  It is deliberately a line offset rather than an in-memory
-    iterator position.  ``token_offset`` is an objective-loader-defined token
-    window offset within that record (zero means the next record). Cursors are
-    valid only with the same source manifest, tokenizer, rank, and world size
-    recorded by the checkpoint.
-    """
+    """Portable resume position for a partitioned shard stream."""
 
     epoch: int = 0
     shard_index: int = 0
@@ -196,8 +170,6 @@ class DataCursor:
 
 @dataclass(frozen=True)
 class StreamRecord:
-    """A validated record with enough identity to advance a cursor."""
-
     shard_index: int
     record_offset: int
     record_id: str
@@ -238,7 +210,7 @@ def iter_jsonl_records(
 
 
 class StreamingShardDataset:
-    """Deterministic, bounded-memory iterator over a shard manifest."""
+    """Deterministic, bounded-memory iterator over a verified shard manifest."""
 
     def __init__(
         self,
@@ -248,24 +220,55 @@ class StreamingShardDataset:
         rank: int = 0,
         world_size: int = 1,
         max_line_bytes: int = 16 * 1024 * 1024,
+        verify_shards: bool = True,
     ) -> None:
         if world_size < 1 or not 0 <= rank < world_size:
             raise ValueError("rank/world_size is invalid")
+        if max_line_bytes < 1:
+            raise ValueError("max_line_bytes must be positive")
         self.manifest = manifest
         self.root = Path(root).resolve()
         self.rank = rank
         self.world_size = world_size
         self.max_line_bytes = max_line_bytes
+        if verify_shards:
+            self.verify_shards()
 
     def _path(self, descriptor: ShardDescriptor) -> Path:
-        path = (self.root / descriptor.path).resolve()
+        unresolved = self.root / descriptor.path
+        if unresolved.is_symlink():
+            raise ValueError(f"shard path must not be a symlink: {descriptor.path}")
+        path = unresolved.resolve()
         if path != self.root and self.root not in path.parents:
             raise ValueError(f"shard path escapes root: {descriptor.path}")
+        if not path.is_file():
+            raise ValueError(f"shard path must be a regular file: {descriptor.path}")
         return path
 
-    def iter_records(self, cursor: DataCursor | None = None) -> Iterator[StreamRecord]:
-        """Yield records assigned to this rank, starting at ``cursor``."""
+    def verify_shards(self) -> None:
+        """Bind manifest descriptors to the current on-disk bytes."""
 
+        for descriptor in self.manifest.shards:
+            path = self._path(descriptor)
+            digest = hashlib.sha256()
+            records = 0
+            with path.open("rb") as handle:
+                for raw in handle:
+                    if len(raw) > self.max_line_bytes:
+                        raise ValueError(
+                            f"shard record exceeds max_line_bytes in {descriptor.shard_id}"
+                        )
+                    digest.update(raw)
+                    records += 1
+            if records != descriptor.records:
+                raise ValueError(
+                    f"shard record count mismatch for {descriptor.shard_id}: "
+                    f"expected {descriptor.records}, found {records}"
+                )
+            if descriptor.sha256 is not None and digest.hexdigest() != descriptor.sha256:
+                raise ValueError(f"shard sha256 mismatch for {descriptor.shard_id}")
+
+    def iter_records(self, cursor: DataCursor | None = None) -> Iterator[StreamRecord]:
         position = cursor or DataCursor(rank=self.rank, world_size=self.world_size)
         if position.rank != self.rank or position.world_size != self.world_size:
             raise ValueError("cursor partition does not match dataset partition")
@@ -287,8 +290,6 @@ class StreamingShardDataset:
     def cursor_after(
         self, record: StreamRecord, *, token_offset: int = 0, epoch: int = 0
     ) -> DataCursor:
-        """Return the next line position after a yielded record."""
-
         if record.shard_index >= len(self.manifest.shards):
             raise ValueError("record shard index is outside manifest")
         return DataCursor(

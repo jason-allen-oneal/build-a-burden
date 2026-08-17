@@ -6,13 +6,7 @@ from .transformer import Transformer
 
 
 def _apply_repetition_penalty(logits: torch.Tensor, history: torch.Tensor, penalty: float) -> None:
-    """Apply the standard sign-preserving repetition penalty in place.
-
-    ``history`` includes the prompt and all tokens generated so far.  This is
-    intentionally an inference-time control, not a change to the model or its
-    evaluation loss.  Keeping the operation here makes callers able to report
-    the exact decoding policy used for a sample.
-    """
+    """Apply the standard sign-preserving repetition penalty in place."""
     if penalty == 1.0:
         return
     for batch_index in range(history.shape[0]):
@@ -26,13 +20,7 @@ def _apply_repetition_penalty(logits: torch.Tensor, history: torch.Tensor, penal
 
 
 def _mask_repeated_ngrams(logits: torch.Tensor, history: torch.Tensor, ngram_size: int) -> None:
-    """Ban tokens that would repeat an already-emitted n-gram.
-
-    If every vocabulary entry is banned for a row, the highest unmasked
-    candidate is retained.  That fallback keeps sampling finite for tiny
-    vocabularies and adversarial prompts; it does not pretend the constraint
-    can always be satisfied.
-    """
+    """Ban tokens that would repeat an already-emitted n-gram."""
     if ngram_size <= 0:
         return
     vocabulary_size = logits.shape[-1]
@@ -69,6 +57,7 @@ def generate(
     generator: torch.Generator | None = None,
     repetition_penalty: float = 1.0,
     no_repeat_ngram_size: int = 0,
+    use_kv_cache: bool = True,
 ) -> torch.Tensor:
     if input_ids.ndim != 2 or input_ids.shape[1] == 0:
         raise ValueError("input_ids must contain at least one prompt token")
@@ -84,13 +73,18 @@ def generate(
         raise ValueError("repetition_penalty must be positive")
     if no_repeat_ngram_size < 0:
         raise ValueError("no_repeat_ngram_size must not be negative")
+    if not isinstance(use_kv_cache, bool):
+        raise ValueError("use_kv_cache must be a boolean")
     model.eval()
     result = input_ids
     cache = None
     current = input_ids
     for _ in range(max_new_tokens):
-        output = model(current, cache=cache, use_cache=True)
-        cache = output.cache
+        if use_kv_cache:
+            output = model(current, cache=cache, use_cache=True)
+            cache = output.cache
+        else:
+            output = model(result, use_cache=False)
         logits = output.logits[:, -1]
         _apply_repetition_penalty(logits, result, repetition_penalty)
         _mask_repeated_ngrams(logits, result, no_repeat_ngram_size)

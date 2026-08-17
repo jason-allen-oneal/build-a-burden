@@ -1,15 +1,4 @@
-"""Bounded-memory repository-local token packing for GPU training.
-
-The record-oriented stream is deliberately conservative, but it wastes most of
-an A100 sequence when source files are short.  This adapter packs serialized
-records into full context blocks while never putting two repositories in the
-same block.  It keeps one record's token list and one block in memory, emits an
-explicit EOS between records, and carries the exact next source cursor as
-checkpoint metadata.
-
-Packing is opt-in.  The original :mod:`token_stream` path remains the reference
-fallback and is preferable when debugging provenance or cursor behavior.
-"""
+"""Bounded-memory repository-local token packing for GPU training."""
 
 from __future__ import annotations
 
@@ -24,8 +13,6 @@ from .token_stream import TokenizedStreamingDataset
 
 @dataclass(frozen=True)
 class PackedBlock:
-    """One full or padded block and the cursor after its final source token."""
-
     input_ids: tuple[int, ...]
     labels: tuple[int, ...]
     attention_mask: tuple[int, ...]
@@ -37,8 +24,6 @@ class PackedBlock:
 
 
 class PackedTokenBatch(dict[str, torch.Tensor]):
-    """Model-compatible batch carrying packed-stream metadata out of band."""
-
     data_position: dict[str, int]
     shard_manifest_hash: str
     tokenizer_hash: str
@@ -82,21 +67,11 @@ class PackedTokenBatch(dict[str, torch.Tensor]):
         self.actual_input_tokens = int(self["attention_mask"].bool().sum())
         self.padded_input_tokens = int(self["input_ids"].numel())
         self.padding_tokens = max(self.padded_input_tokens - self.actual_input_tokens, 0)
-        # Keep the constructor's pad_id explicit so accidental pad collisions
-        # are caught in tests and during future tokenizer changes.
         if pad_id < 0:
             raise ValueError("pad_id must not be negative")
 
 
 class PackedTokenBlockBatcher:
-    """Pack tokenized records into repository-local context blocks.
-
-    ``batch_size`` is the microbatch dimension.  Each block is independently
-    causal, so blocks from different repositories may share a tensor batch but
-    can never attend to one another.  A block never crosses a repository
-    boundary; a partial block is padded and flushed before the next repository.
-    """
-
     def __init__(
         self,
         dataset: TokenizedStreamingDataset,
@@ -133,10 +108,19 @@ class PackedTokenBlockBatcher:
         values, objective = self.dataset._record_tokens(record)  # noqa: SLF001
         return [*values, self.eos_id], objective
 
+    @staticmethod
+    def _at_epoch_start(position: DataCursor) -> bool:
+        return (
+            position.shard_index == 0
+            and position.record_offset == 0
+            and position.token_offset == 0
+        )
+
     def _blocks(self, cursor: DataCursor, epochs: int | None) -> Iterator[PackedBlock]:
         position = cursor
         completed = 0
         while epochs is None or completed < epochs:
+            started_at_epoch_start = self._at_epoch_start(position)
             records = self.dataset.shards.iter_records(position)
             pending: tuple[StreamRecord, list[int], str, int] | None = None
             block_ids: list[int] = []
@@ -166,10 +150,6 @@ class PackedTokenBlockBatcher:
                                 block_token_objectives,
                                 last_cursor,
                             )
-                            block_ids, block_mask, block_loss, block_records = [], [], [], []
-                            block_objectives = {"causal": 0, "fim": 0}
-                            block_token_objectives = []
-                            block_repo = None
                             yielded = True
                         break
                     if (
@@ -202,11 +182,11 @@ class PackedTokenBlockBatcher:
                             block_token_objectives,
                             last_cursor,
                         )
+                        yielded = True
                     block_ids, block_mask, block_loss, block_records = [], [], [], []
                     block_objectives = {"causal": 0, "fim": 0}
                     block_token_objectives = []
                     block_repo = None
-                    yielded = True
                     continue
                 block_repo = repository_id
                 available = self.dataset.context_length - len(block_ids)
@@ -252,16 +232,16 @@ class PackedTokenBlockBatcher:
                         block_token_objectives,
                         last_cursor,
                     )
+                    yielded = True
                     block_ids, block_mask, block_loss, block_records = [], [], [], []
                     block_objectives = {"causal": 0, "fim": 0}
                     block_token_objectives = []
                     block_repo = None
-                    yielded = True
 
             completed += 1
             if epochs is not None and completed >= epochs:
                 break
-            if not yielded:
+            if not yielded and started_at_epoch_start:
                 raise ValueError("cannot repeat an empty packed token stream")
             position = DataCursor(
                 epoch=position.epoch + 1,
@@ -290,10 +270,6 @@ class PackedTokenBlockBatcher:
         if len(token_objectives) != len(ids):
             raise ValueError("packed block objective labels must match token count")
         pad = width - len(ids)
-        # The first token conditions the block and is not a next-token target.
-        # The trainer shifts masks once more, so this also documents the
-        # accounting contract at the data boundary without changing model
-        # semantics for callers that provide their own masks.
         block_loss = [0, *([1] * (len(ids) - 1))]
         shifted_objectives = token_objectives[1:]
         exact_objective_tokens = {
