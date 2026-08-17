@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import resource
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,17 @@ from .compile import compile_typescript
 from .memorization import exact_file_match, longest_common_substring
 from .security import contains_secret
 from .syntax import parse_typescript
+
+
+@dataclass(frozen=True)
+class _CandidateRank:
+    expected_length: int
+
+    def __call__(self, item: str) -> tuple[int, bytes]:
+        return (
+            abs(len(item) - self.expected_length),
+            hashlib.sha256(item.encode()).digest(),
+        )
 
 
 def repetition_rate(source: str, width: int = 3) -> float:
@@ -50,15 +62,7 @@ def evaluate_sources(
     longest = 0
     if compute_longest_matching_span:
         for source in sources:
-            source_length = len(source)
-
-            def candidate_rank(item: str) -> tuple[int, bytes]:
-                return (
-                    abs(len(item) - source_length),
-                    hashlib.sha256(item.encode()).digest(),
-                )
-
-            candidates = sorted(reference, key=candidate_rank)[:16]
+            candidates = sorted(reference, key=_CandidateRank(len(source)))[:16]
             longest = max(
                 longest,
                 max(
