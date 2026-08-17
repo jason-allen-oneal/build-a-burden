@@ -241,9 +241,7 @@ class TokenizedStreamingDataset:
     @staticmethod
     def _at_epoch_start(position: DataCursor) -> bool:
         return (
-            position.shard_index == 0
-            and position.record_offset == 0
-            and position.token_offset == 0
+            position.shard_index == 0 and position.record_offset == 0 and position.token_offset == 0
         )
 
     def iter_examples(

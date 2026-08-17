@@ -20,17 +20,20 @@ class FakeTokenizer:
 
 
 def write_shard(path, *, split="train"):
-    payload = json.dumps(
-        {
-            "record": {
-                "record_id": "record-1",
-                "repository_id": "repo-1",
-                "split": split,
+    payload = (
+        json.dumps(
+            {
+                "record": {
+                    "record_id": "record-1",
+                    "repository_id": "repo-1",
+                    "split": split,
+                },
+                "text": "const value: number = 1;",
             },
-            "text": "const value: number = 1;",
-        },
-        sort_keys=True,
-    ) + "\n"
+            sort_keys=True,
+        )
+        + "\n"
+    )
     path.write_text(payload, encoding="utf-8")
     return payload
 
