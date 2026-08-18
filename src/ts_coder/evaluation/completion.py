@@ -50,20 +50,42 @@ def load_completion_tasks(path: str | Path) -> list[dict[str, Any]]:
 
 
 def evaluate_completion_tasks(
-    tasks: list[dict[str, Any]], generator: CompletionGenerator
+    tasks: list[dict[str, Any]],
+    generator: CompletionGenerator,
+    *,
+    tool_root: str | Path | None = None,
+    compile_timeout_seconds: int = 10,
 ) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     for task in tasks:
         completion = generator(task["prompt"], task["max_new_tokens"])
         repeated = generator(task["prompt"], task["max_new_tokens"])
         source = task["prompt"] + completion
-        parsed = parse_typescript(source, filename=task["filename"])
-        compiled = compile_typescript(source, filename=task["filename"])
+        if tool_root is None and compile_timeout_seconds == 10:
+            # Preserve the original two-argument adapter contract for callers
+            # and tests that replace these functions with small doubles.
+            parsed = parse_typescript(source, task["filename"])
+            compiled = compile_typescript(source, task["filename"])
+        else:
+            parsed = parse_typescript(
+                source,
+                filename=task["filename"],
+                timeout=compile_timeout_seconds,
+                tool_root=tool_root,
+            )
+            compiled = compile_typescript(
+                source,
+                filename=task["filename"],
+                timeout=compile_timeout_seconds,
+                tool_root=tool_root,
+            )
         results.append(
             {
                 "id": task["id"],
                 "filename": task["filename"],
+                "prompt": task["prompt"],
                 "completion": completion,
+                "source": source,
                 "generation_characters": len(completion),
                 "repetition_rate": repetition_rate(completion),
                 "deterministic": completion == repeated,
@@ -92,6 +114,10 @@ def model_completion_generator(
     *,
     repetition_penalty: float = 1.0,
     no_repeat_ngram_size: int = 0,
+    use_kv_cache: bool = True,
+    temperature: float = 0.0,
+    top_k: int | None = None,
+    top_p: float | None = 1.0,
 ) -> CompletionGenerator:
     """Create a greedy generator with explicit, reportable decode controls."""
 
@@ -107,9 +133,12 @@ def model_completion_generator(
             model,
             torch.tensor([prompt_ids], dtype=torch.long, device=device),
             max_new_tokens=count,
-            temperature=0.0,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
             repetition_penalty=repetition_penalty,
             no_repeat_ngram_size=no_repeat_ngram_size,
+            use_kv_cache=use_kv_cache,
         )
         return tokenizer.decode(output[0, len(prompt_ids) :].tolist(), skip_special_tokens=False)
 

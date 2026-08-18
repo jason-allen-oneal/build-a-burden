@@ -45,6 +45,8 @@ class Trainer:
     ) -> None:
         if gradient_accumulation_steps <= 0:
             raise ValueError("gradient_accumulation_steps must be positive")
+        if not math.isfinite(max_grad_norm) or max_grad_norm <= 0:
+            raise ValueError("max_grad_norm must be finite and positive")
         self.device = torch.device(device)
         self.model = model.to(self.device)
         self.optimizer = optimizer
@@ -56,10 +58,6 @@ class Trainer:
             raise ValueError("precision must be fp32 or bf16")
         self.precision = precision
         self.state = TrainerState()
-        # A streaming batch may expose a source cursor and immutable shard
-        # identity as out-of-band attributes.  They are committed only after
-        # the optimizer step, so a failed/partial accumulation cannot skip
-        # source records on resume.
         self.data_position: dict[str, int] | None = None
         self.shard_manifest_hash: str | None = None
         self.parallel: dict[str, int] | None = None
@@ -145,7 +143,9 @@ class Trainer:
             try:
                 batch = next(iterator)
             except StopIteration:
-                return None
+                if batches_consumed == 0:
+                    return None
+                break
             batch_position = getattr(batch, "data_position", None)
             if batch_position is not None:
                 if not isinstance(batch_position, dict):
@@ -176,38 +176,34 @@ class Trainer:
                     pending_objective_tokens[objective] += int(
                         batch_objective_tokens.get(objective, 0)
                     )
-            batch = {key: value.to(self.device) for key, value in batch.items()}
+            prepared = {key: value.to(self.device) for key, value in batch.items()}
             autocast = (
                 torch.autocast(device_type=self.device.type, dtype=torch.bfloat16)
                 if self.precision == "bf16"
                 else nullcontext()
             )
             with autocast:
-                output = self.model(**batch)
+                output = self.model(**prepared)
             if output.loss is None or not torch.isfinite(output.loss):
                 raise FloatingPointError("training loss is missing, NaN, or infinite")
-            batch_loss_tokens = supervised_token_count(batch)
+            batch_loss_tokens = supervised_token_count(prepared)
             if batch_loss_tokens:
-                # ``Transformer`` returns a mean over valid targets.  Weight
-                # microbatches by their actual target count so padding and a
-                # short final window cannot distort the optimization gradient.
                 (output.loss * batch_loss_tokens).backward()
             accumulated_loss += float(output.loss.detach()) * batch_loss_tokens
             loss_tokens += batch_loss_tokens
-            batch_tokens += input_token_count(batch)
-            padded_tokens += int(batch["input_ids"].numel())
-            sequence_length = int(batch["input_ids"].shape[1])
+            batch_tokens += input_token_count(prepared)
+            padded_tokens += int(prepared["input_ids"].numel())
+            sequence_length = int(prepared["input_ids"].shape[1])
             batches_consumed += 1
-        if loss_tokens:
-            for parameter in self.model.parameters():
-                if parameter.grad is not None:
-                    parameter.grad.div_(loss_tokens)
+        if loss_tokens <= 0:
+            self.optimizer.zero_grad(set_to_none=True)
+            raise ValueError("training step contains no supervised target tokens")
+        for parameter in self.model.parameters():
+            if parameter.grad is not None:
+                parameter.grad.div_(loss_tokens)
         grad_norm = nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
         if not math.isfinite(float(grad_norm)):
             raise FloatingPointError("gradient norm is NaN or infinite")
-        # A user SIGINT must observe either the pre-step state or the complete
-        # post-step state.  Defer delivery across this small commit boundary so
-        # interruption checkpoints cannot pair new weights with an old cursor.
         with _defer_sigint():
             self.optimizer.step()
             if self.scheduler is not None:
@@ -223,7 +219,7 @@ class Trainer:
         return TrainingMetrics(
             self.state.global_step,
             self.state.tokens_processed,
-            accumulated_loss / max(loss_tokens, 1),
+            accumulated_loss / loss_tokens,
             self.optimizer.param_groups[0]["lr"],
             float(grad_norm),
             batch_tokens / elapsed,
@@ -238,17 +234,20 @@ class Trainer:
     @torch.no_grad()
     def evaluate_batches(self, batches: Iterable[Mapping[str, torch.Tensor]]) -> float | None:
         """Evaluate masked causal loss without changing optimizer or RNG state."""
+        was_training = self.model.training
         self.model.eval()
         weighted_loss = 0.0
         loss_tokens = 0
-        for batch in batches:
-            prepared = {key: value.to(self.device) for key, value in batch.items()}
-            output = self.model(**prepared)
-            if output.loss is not None and torch.isfinite(output.loss):
-                count = supervised_token_count(prepared)
-                weighted_loss += float(output.loss) * count
-                loss_tokens += count
-        self.model.train()
+        try:
+            for batch in batches:
+                prepared = {key: value.to(self.device) for key, value in batch.items()}
+                output = self.model(**prepared)
+                if output.loss is not None and torch.isfinite(output.loss):
+                    count = supervised_token_count(prepared)
+                    weighted_loss += float(output.loss) * count
+                    loss_tokens += count
+        finally:
+            self.model.train(was_training)
         return weighted_loss / loss_tokens if loss_tokens else None
 
     def save(

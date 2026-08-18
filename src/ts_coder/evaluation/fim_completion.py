@@ -1,9 +1,4 @@
-"""Objective-aware fill-in-the-middle completion evaluation.
-
-The ordinary completion fixture exercises a causal prompt.  This module keeps
-FIM evaluation separate so a model trained with FIM markers is evaluated with
-the same prefix/suffix/middle serialization it saw during training.
-"""
+"""Objective-aware fill-in-the-middle completion evaluation."""
 
 from __future__ import annotations
 
@@ -26,8 +21,6 @@ _CONTROL_MARKERS = ("<pad>", "<eos>", "<fim_prefix>", "<fim_suffix>", "<fim_midd
 
 
 def load_fim_tasks(path: str | Path) -> list[dict[str, Any]]:
-    """Load and strictly validate held-out FIM task records."""
-
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict) or set(raw) != {"schema_version", "scope", "tasks"}:
         raise ValueError("FIM task file has an unsupported schema")
@@ -68,16 +61,17 @@ def load_fim_tasks(path: str | Path) -> list[dict[str, Any]]:
 
 
 def fim_prompt(task: dict[str, Any]) -> str:
-    """Serialize one task using the exact training-time FIM markers."""
-
     return f"<fim_prefix>{task['prefix']}<fim_suffix>{task['suffix']}<fim_middle>"
 
 
 def evaluate_fim_tasks(
-    tasks: list[dict[str, Any]], generator: FIMGenerator, encode: TokenEncoder
+    tasks: list[dict[str, Any]],
+    generator: FIMGenerator,
+    encode: TokenEncoder,
+    *,
+    tool_root: str | Path | None = None,
+    compile_timeout_seconds: int = 10,
 ) -> dict[str, Any]:
-    """Evaluate reconstruction, syntax, compilation, and determinism."""
-
     results: list[dict[str, Any]] = []
     for task in tasks:
         prompt = fim_prompt(task)
@@ -87,8 +81,22 @@ def evaluate_fim_tasks(
         reconstructed = task["prefix"] + completion + task["suffix"]
         expected_tokens = encode(expected)
         actual_tokens = encode(completion)
-        parsed = parse_typescript(reconstructed, filename=task["filename"])
-        compiled = compile_typescript(reconstructed, filename=task["filename"])
+        if tool_root is None and compile_timeout_seconds == 10:
+            parsed = parse_typescript(reconstructed, task["filename"])
+            compiled = compile_typescript(reconstructed, task["filename"])
+        else:
+            parsed = parse_typescript(
+                reconstructed,
+                filename=task["filename"],
+                timeout=compile_timeout_seconds,
+                tool_root=tool_root,
+            )
+            compiled = compile_typescript(
+                reconstructed,
+                filename=task["filename"],
+                timeout=compile_timeout_seconds,
+                tool_root=tool_root,
+            )
         results.append(
             {
                 "id": task["id"],
@@ -129,9 +137,11 @@ def model_fim_generator(
     *,
     repetition_penalty: float = 1.0,
     no_repeat_ngram_size: int = 0,
+    use_kv_cache: bool = True,
+    temperature: float = 0.0,
+    top_k: int | None = None,
+    top_p: float | None = 1.0,
 ) -> FIMGenerator:
-    """Create a greedy FIM generator with explicit decode controls."""
-
     special_ids = {
         token_id
         for token in ("<pad>", "<eos>", "<fim_prefix>", "<fim_suffix>", "<fim_middle>")
@@ -150,10 +160,13 @@ def model_fim_generator(
             model,
             torch.tensor([prompt_ids], dtype=torch.long, device=device),
             max_new_tokens=count,
-            temperature=0.0,
+            temperature=temperature,
+            top_k=top_k,
+            top_p=top_p,
             stop_ids=special_ids,
             repetition_penalty=repetition_penalty,
             no_repeat_ngram_size=no_repeat_ngram_size,
+            use_kv_cache=use_kv_cache,
         )
         generated_ids = output[0, len(prompt_ids) :].tolist()
         generated_ids = [token for token in generated_ids if token not in special_ids]
@@ -163,8 +176,6 @@ def model_fim_generator(
 
 
 def make_fim_sample(task: dict[str, Any]) -> FIMSample:
-    """Return a typed sample for callers that need reconstruction metadata."""
-
     start = len(task["prefix"])
     end = start + len(task["middle"])
     return FIMSample(

@@ -10,8 +10,24 @@ from typing import Any
 MAX_SOURCE_CHARS = 2_000_000
 
 
+def _tool_root(tool_root: str | Path | None = None) -> Path:
+    project_root = Path(__file__).resolve().parents[3]
+    requested = Path(tool_root) if tool_root is not None else project_root / "tools" / "typescript"
+    if requested.is_symlink():
+        raise ValueError("TypeScript tool root must not be a symlink")
+    candidate = requested.resolve()
+    if candidate != project_root and project_root not in candidate.parents:
+        raise ValueError("TypeScript tool root must remain inside the project")
+    return candidate
+
+
 def compile_typescript(
-    source: str, filename: str = "generated.ts", helper: str | Path | None = None, timeout: int = 10
+    source: str,
+    filename: str = "generated.ts",
+    helper: str | Path | None = None,
+    timeout: int = 10,
+    *,
+    tool_root: str | Path | None = None,
 ) -> dict[str, Any]:
     if len(source) > MAX_SOURCE_CHARS:
         return {
@@ -22,19 +38,31 @@ def compile_typescript(
         }
     if timeout <= 0:
         raise ValueError("timeout must be positive")
-    expected = Path(__file__).resolve().parents[3] / "tools" / "typescript" / "dist" / "compile.js"
-    target = Path(helper).resolve() if helper else expected
-    if target != expected.resolve():
+    expected_path = _tool_root(tool_root) / "dist" / "compile.js"
+    requested = Path(helper) if helper else expected_path
+    if expected_path.is_symlink() or requested.is_symlink():
         return {
             "success": False,
             "diagnostics": [
                 {
-                    "message": "helper path is outside the project toolchain",
+                    "message": "helper path must not be a symlink",
                     "code": "HELPER_UNTRUSTED",
                 }
             ],
         }
-    if not target.exists():
+    expected = expected_path.resolve()
+    target = requested.resolve()
+    if target != expected:
+        return {
+            "success": False,
+            "diagnostics": [
+                {
+                    "message": "helper path is outside the configured project toolchain",
+                    "code": "HELPER_UNTRUSTED",
+                }
+            ],
+        }
+    if not target.is_file():
         return {
             "success": False,
             "diagnostics": [
@@ -50,8 +78,22 @@ def compile_typescript(
             timeout=timeout,
             check=False,
         )
-        return json.loads(result.stdout)
+        if result.returncode != 0 and not result.stdout.strip():
+            message = (
+                result.stderr.strip()[-500:] or f"helper exited with status {result.returncode}"
+            )
+            return {
+                "success": False,
+                "diagnostics": [{"message": message, "code": "HELPER_ERROR"}],
+            }
+        value = json.loads(result.stdout)
+        if not isinstance(value, dict):
+            raise json.JSONDecodeError("helper response must be an object", result.stdout, 0)
+        return value
     except subprocess.TimeoutExpired:
         return {"success": False, "timeout": True, "diagnostics": []}
-    except json.JSONDecodeError as exc:
-        return {"success": False, "diagnostics": [{"message": str(exc), "code": "HELPER_ERROR"}]}
+    except (OSError, json.JSONDecodeError) as exc:
+        return {
+            "success": False,
+            "diagnostics": [{"message": str(exc), "code": "HELPER_ERROR"}],
+        }

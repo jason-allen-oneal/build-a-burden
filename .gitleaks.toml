@@ -1,0 +1,11 @@
+title = "ts-coder secret-scanning exceptions"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow machine-generated SHA-256 experiment identity lines"
+regexTarget = "line"
+regexes = [
+  '''(?i)^\s*-\s*(?:tokenizer|checkpoint|manifest|documents|config|evaluation(?: artifact)?|artifact)(?:[^:\n]{0,48})?\s+sha-256:\s*`[0-9a-f]{64}`(?:[.;,].*)?\s*$''',
+]

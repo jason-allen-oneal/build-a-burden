@@ -1,16 +1,4 @@
-"""Bounded-memory tokenization and batching for immutable JSONL shards.
-
-The development trainer can materialize a list of documents and windows, but
-that is not a viable interface for a real corpus.  This module keeps only one
-source record and one training batch in memory at a time.  Objective selection
-is a stable function of ``record_id`` and seed, while the cursor identifies the
-next source line and token window to consume.
-
-The batch metadata deliberately lives on a ``dict`` subclass rather than as
-mapping keys.  It therefore remains compatible with ``Transformer.forward``
-while allowing the trainer to persist the stream position after a committed
-optimizer step.
-"""
+"""Bounded-memory tokenization and batching for immutable JSONL shards."""
 
 from __future__ import annotations
 
@@ -29,16 +17,6 @@ from .streaming import DataCursor, ShardManifest, StreamingShardDataset, StreamR
 
 
 def is_compiler_harness_record(record: StreamRecord) -> bool:
-    """Identify virtual compiler-test metadata, not ordinary TS code.
-
-    Fourslash/compiler fixtures are valid ``.ts`` files, but lines such as
-    ``// @Filename:`` describe a virtual multi-file test harness. In a
-    standalone completion objective they are high-frequency metadata targets.
-    This predicate only changes an explicit training view; the audited source
-    record and its provenance remain unchanged. ``@Column`` is deliberately
-    retained because it is executable decorator syntax, not harness metadata.
-    """
-
     text = record.value.get("text", "")
     if not isinstance(text, str):
         return False
@@ -49,14 +27,10 @@ def is_compiler_harness_record(record: StreamRecord) -> bool:
 
 
 class TextTokenizer(Protocol):
-    """Small tokenizer surface required by the streaming adapter."""
-
     def encode(self, text: str) -> Any: ...
 
 
 def shard_manifest_hash(manifest: ShardManifest) -> str:
-    """Return the content hash used as the shard-stream identity."""
-
     encoded = json.dumps(manifest.to_mapping(), sort_keys=True, separators=(",", ":")).encode(
         "utf-8"
     )
@@ -65,8 +39,6 @@ def shard_manifest_hash(manifest: ShardManifest) -> str:
 
 @dataclass(frozen=True)
 class TokenizedExample:
-    """One fixed-length causal training window and its resume position."""
-
     input_ids: tuple[int, ...]
     labels: tuple[int, ...]
     attention_mask: tuple[int, ...]
@@ -79,8 +51,6 @@ class TokenizedExample:
     next_cursor: DataCursor
 
     def as_lists(self) -> dict[str, list[int]]:
-        """Return only model inputs, without leaking cursor metadata."""
-
         return {
             "input_ids": list(self.input_ids),
             "labels": list(self.labels),
@@ -90,8 +60,6 @@ class TokenizedExample:
 
 
 class TokenizedBatch(dict[str, torch.Tensor]):
-    """A model-compatible batch carrying stream metadata out-of-band."""
-
     data_position: dict[str, int]
     shard_manifest_hash: str
     tokenizer_hash: str
@@ -144,15 +112,6 @@ class TokenizedBatch(dict[str, torch.Tensor]):
 
 
 class TokenizedStreamingDataset:
-    """Tokenize and window a :class:`StreamingShardDataset` on demand.
-
-    ``token_offset`` in the cursor is the next token-window start within the
-    current record, not a byte offset.  It is zero when the next record should
-    be read.  The adapter tokenizes one record at a time; a single unusually
-    large record is bounded by the shard reader's ``max_line_bytes`` limit and
-    never causes the whole corpus to be resident.
-    """
-
     def __init__(
         self,
         shards: StreamingShardDataset,
@@ -203,8 +162,6 @@ class TokenizedStreamingDataset:
         return DataCursor(rank=self.rank, world_size=self.world_size)
 
     def include_record(self, record: StreamRecord) -> bool:
-        """Apply the configured training-view filter without mutating data."""
-
         return not (self.exclude_compiler_harness and is_compiler_harness_record(record))
 
     def _encode(self, text: str) -> list[int]:
@@ -234,8 +191,6 @@ class TokenizedStreamingDataset:
                 ).serialized
                 objective = "fim"
             except ValueError:
-                # Short files and files containing only control markers remain
-                # useful causal examples; this fallback is deterministic.
                 pass
         return self._encode(source), objective
 
@@ -283,14 +238,18 @@ class TokenizedStreamingDataset:
                 next_cursor,
             )
 
+    @staticmethod
+    def _at_epoch_start(position: DataCursor) -> bool:
+        return (
+            position.shard_index == 0 and position.record_offset == 0 and position.token_offset == 0
+        )
+
     def iter_examples(
         self,
         cursor: DataCursor | None = None,
         *,
         epochs: int | None = 1,
     ) -> Iterator[TokenizedExample]:
-        """Yield examples from ``cursor`` for a bounded or repeating epoch count."""
-
         if epochs is not None and epochs < 1:
             raise ValueError("epochs must be positive or null")
         position = cursor or self.initial_cursor()
@@ -299,6 +258,7 @@ class TokenizedStreamingDataset:
         completed = 0
         while epochs is None or completed < epochs:
             yielded = False
+            started_at_epoch_start = self._at_epoch_start(position)
             for record in self.shards.iter_records(position):
                 if self.split is not None and record.value["record"].get("split") != self.split:
                     continue
@@ -316,7 +276,7 @@ class TokenizedStreamingDataset:
             completed += 1
             if epochs is not None and completed >= epochs:
                 break
-            if not yielded:
+            if not yielded and started_at_epoch_start:
                 raise ValueError("cannot repeat an empty tokenized shard stream")
             position = DataCursor(
                 epoch=position.epoch + 1,
@@ -329,8 +289,6 @@ class TokenizedStreamingDataset:
 
 
 class TokenizedStreamingBatcher:
-    """Group streamed examples without materializing the source corpus."""
-
     def __init__(
         self,
         dataset: TokenizedStreamingDataset,
@@ -352,13 +310,9 @@ class TokenizedStreamingBatcher:
 
     @property
     def cursor(self) -> DataCursor:
-        """Return the last fully yielded batch's cursor."""
-
         return self._cursor
 
     def seek(self, cursor: DataCursor) -> None:
-        """Resume before the example identified by ``cursor``."""
-
         if cursor.rank != self.dataset.rank or cursor.world_size != self.dataset.world_size:
             raise ValueError("cursor partition does not match dataset partition")
         self._cursor = cursor
