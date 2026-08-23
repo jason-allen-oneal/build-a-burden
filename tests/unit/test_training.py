@@ -332,6 +332,8 @@ def test_resume_identity_rejects_hash_and_critical_config_mismatch(tmp_path) -> 
         "micro_batch_size": 1,
         "gradient_accumulation_steps": 1,
         "objectives": {"causal_fraction": 0.5, "fim_fraction": 0.5},
+        "evaluation_quarantine_manifest": "manifests/evaluation-quarantine.json",
+        "evaluation_quarantine_manifest_sha256": "a" * 64,
     }
     checkpoint = trainer.save(
         tmp_path / "resume.pt",
@@ -358,6 +360,18 @@ def test_resume_identity_rejects_hash_and_critical_config_mismatch(tmp_path) -> 
             checkpoint,
             model_config,
             changed_microbatch,
+            "tokenizer-hash",
+            "manifest-hash",
+        )
+    changed_quarantine = {
+        **training_config,
+        "evaluation_quarantine_manifest_sha256": "b" * 64,
+    }
+    with pytest.raises(ValueError, match="evaluation_quarantine_manifest_sha256"):
+        _validate_resume_identity(
+            checkpoint,
+            model_config,
+            changed_quarantine,
             "tokenizer-hash",
             "manifest-hash",
         )

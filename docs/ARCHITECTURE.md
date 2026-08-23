@@ -38,8 +38,8 @@ The project deliberately separates a local correctness tier from useful training
 | Tier | Model | Purpose | Hardware decision |
 |---|---:|---|---|
 | Local correctness | 5M–25M | tests, overfit, checkpoint/resume, tokenizer/eval | CPU workstation |
-| Useful pilot | 100M–300M | scaling evidence and held-out compile/test behavior | approved GPU host |
-| Serious target | ~1.13B | production-shaped base model candidate | 80 GB A100 with checkpointing; multi-GPU for throughput |
+| Historical pilot | 100M–300M | retained diagnostic evidence; no retraining | none planned |
+| Serious target | ~1.13B | next production-shaped capability candidate | persistent multi-GPU target; bounded single-device smoke only |
 
 The local development workstation has an 8-thread i7-1165G7, 62 GiB RAM, no CUDA
 device, and roughly 96 GiB free disk. It can host the 25M smoke model and audit
@@ -62,23 +62,16 @@ GPU memory, corpus size, token budget, and checkpoint throughput are approved. A
 preferable for a serious token budget. It must not be instantiated or trained on
 the local CPU host.
 
-The first architecture worth taking to a GPU is the 300M pilot in
-`configs/model/pilot-300m.yaml`: 24 layers, hidden size 1024, 16 query heads,
-4 KV heads, FFN size 2816, vocabulary 32768, context 4096, and tied embeddings.
-Its exact analytic count is `304,137,216` parameters. The audit estimates about
-5.1 GB for BF16 weights, gradients, AdamW moments, and a deliberately incomplete
-activation reserve; in practice it needs a larger safety margin for kernels,
-temporary buffers, validation, and checkpointing. Treat 16 GB as an aggressive
-floor and 24 GB as the sane single-GPU starting point. This file is planning-only
-until the corpus and GPU run contract are approved.
+The former 300M capability ladder is retired. Its architecture and completed runs
+remain diagnostic evidence, and bounded smoke programs may still expose optimizer,
+memory, throughput, checkpoint, and evaluation failures. The next capability
+candidate is the planning-only 1.13B architecture; an intermediate smoke result
+must not be presented as a smaller-model training milestone.
 
 The current filtered approved corpus is 7,376,774 tokenizer tokens. That is enough to
-exercise the pipeline, not enough to train either pilot credibly. A 300M run needs
-at least hundreds of millions of *distinct* approved tokens for a diagnostic
-scaling experiment and preferably several billion for a useful code model. The
-1.13B candidate should not be scheduled until the corpus plan, deduplication
-statistics, and token budget support it; parameter count alone is not evidence of
-capability.
+exercise the pipeline, not enough to train the 1.13B candidate credibly. The initial
+1B capability run is blocked below the reviewed 3-billion-token floor in
+`DIRECT_1B_PLAN.md`; parameter count alone is not evidence of capability.
 
 ## Scale-up work required before the serious target
 

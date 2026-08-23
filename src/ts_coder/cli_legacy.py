@@ -46,6 +46,7 @@ from .evaluation.fim_completion import (
     model_fim_generator,
 )
 from .evaluation.loss import perplexity
+from .evaluation.quarantine import verify_quarantine
 from .evaluation.runner import evaluate_sources
 from .model import count_parameters, model_audit
 from .model.config import ModelConfig as RuntimeModelConfig
@@ -148,6 +149,9 @@ _DATA_KEYS = {
     "acquisition_max_files",
     "acquisition_max_total_bytes",
     "acquisition_max_path_depth",
+    "evaluation_quarantine_manifest",
+    "evaluation_quarantine_manifest_sha256",
+    "require_evaluation_quarantine",
 }
 _TOKENIZER_KEYS = {
     "schema_version",
@@ -213,6 +217,8 @@ _TRAINING_KEYS = {
     "packed_streaming",
     "exclude_compiler_harness",
     "approval_required",
+    "evaluation_quarantine_manifest",
+    "evaluation_quarantine_manifest_sha256",
     "resume_from",
     "distributed",
     "streaming",
@@ -713,6 +719,8 @@ def _validate_resume_identity(
         "streaming",
         "packed_streaming",
         "exclude_compiler_harness",
+        "evaluation_quarantine_manifest",
+        "evaluation_quarantine_manifest_sha256",
         "shard_manifest",
     )
     mismatched = [key for key in critical if previous_training.get(key) != training_config.get(key)]
@@ -733,6 +741,17 @@ def _cmd_corpus(args: argparse.Namespace) -> int:
     ):
         raise ValueError("splits must contain train/validation/test probabilities summing to 1")
     root = Path.cwd()
+    require_quarantine = bool(cfg.get("require_evaluation_quarantine", False))
+    quarantine_path = None
+    if cfg.get("evaluation_quarantine_manifest"):
+        quarantine_path = _safe_project_path(root, cfg["evaluation_quarantine_manifest"])
+        expected_quarantine_hash = cfg.get("evaluation_quarantine_manifest_sha256")
+        if not isinstance(expected_quarantine_hash, str) or not expected_quarantine_hash:
+            raise ValueError("evaluation quarantine manifest requires a configured digest")
+        if sha256_file(quarantine_path) != expected_quarantine_hash:
+            raise ValueError("evaluation quarantine manifest hash does not match configured digest")
+    elif require_quarantine:
+        raise ValueError("require_evaluation_quarantine requires evaluation_quarantine_manifest")
     require_approval = bool(cfg.get("require_approval", False))
     approval_path = None
     approval_records = []
@@ -769,6 +788,8 @@ def _cmd_corpus(args: argparse.Namespace) -> int:
     real_source_intake = require_approval and any(
         str(source.get("commit_sha", "fixture")) != "fixture" for source in selected_config_sources
     )
+    if real_source_intake and quarantine_path is None:
+        raise ValueError("real approved-source builds require an evaluation quarantine")
     for source in cfg.get("sources", []):
         if requested_sources and str(source.get("source_id", "")) not in requested_sources:
             continue
@@ -851,6 +872,16 @@ def _cmd_corpus(args: argparse.Namespace) -> int:
         float(splits["validation"]),
         group_by_repository=real_source_intake,
     )
+    quarantine_report = None
+    if quarantine_path is not None:
+        included_contents = {
+            record["record_id"]: all_contents[record["record_id"]]
+            for record in all_records
+            if record["included"]
+        }
+        quarantine_report = verify_quarantine(
+            quarantine_path, project_root=root, corpus=included_contents
+        )
     dry_run = bool(getattr(args, "dry_run", False))
     manifest = _safe_project_path(root, cfg.get("output_manifest", "manifests/dev.jsonl"))
     corpus_dir = _safe_project_path(root, cfg.get("output_corpus", "artifacts/corpus/dev"))
@@ -932,6 +963,7 @@ def _cmd_corpus(args: argparse.Namespace) -> int:
             ),
         },
         "repository_grouping_enforced": real_source_intake,
+        "evaluation_quarantine": quarantine_report,
         "repositories_by_split": dict(
             sorted(
                 Counter(
@@ -946,6 +978,30 @@ def _cmd_corpus(args: argparse.Namespace) -> int:
             json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )
     print(json.dumps(summary, indent=2, sort_keys=True))
+    return 0
+
+
+def _cmd_quarantine_verify(args: argparse.Namespace) -> int:
+    root = Path.cwd()
+    manifest = _safe_project_path(root, args.manifest)
+    corpus: dict[str, str] = {}
+    if args.corpus:
+        corpus_path = _safe_project_path(root, args.corpus)
+        for line_number, line in enumerate(corpus_path.read_text(encoding="utf-8").splitlines(), 1):
+            if not line:
+                continue
+            value = json.loads(line)
+            if not isinstance(value, dict) or not isinstance(value.get("text"), str):
+                raise ValueError(f"invalid corpus document at line {line_number}")
+            record = value.get("record")
+            record_id = record.get("record_id") if isinstance(record, dict) else None
+            if not isinstance(record_id, str) or not record_id:
+                raise ValueError(f"corpus document lacks record_id at line {line_number}")
+            if record_id in corpus:
+                raise ValueError(f"duplicate corpus record_id: {record_id}")
+            corpus[record_id] = value["text"]
+    report = verify_quarantine(manifest, project_root=root, corpus=corpus)
+    print(json.dumps(report, indent=2, sort_keys=True))
     return 0
 
 
@@ -1649,6 +1705,12 @@ def build_parser() -> argparse.ArgumentParser:
     model_audit_parser.add_argument("--config", required=True)
     model_audit_parser.add_argument("--output")
     model_audit_parser.set_defaults(func=_cmd_model_audit)
+    quarantine = sub.add_parser("evaluation-quarantine")
+    quarantine_sub = quarantine.add_subparsers(dest="quarantine_command", required=True)
+    quarantine_verify = quarantine_sub.add_parser("verify")
+    quarantine_verify.add_argument("--manifest", default="manifests/evaluation-quarantine.json")
+    quarantine_verify.add_argument("--corpus")
+    quarantine_verify.set_defaults(func=_cmd_quarantine_verify)
     corpus = sub.add_parser("corpus")
     corpus_sub = corpus.add_subparsers(dest="corpus_command", required=True)
     corpus_build = corpus_sub.add_parser("build")

@@ -27,3 +27,5 @@ packed_streaming: true
 exclude_compiler_harness: true
 max_line_bytes: 16777216
 approval_required: true
+evaluation_quarantine_manifest: manifests/evaluation-quarantine.json
+evaluation_quarantine_manifest_sha256: bffad0b43ff78597cd394a8286fc6e5b37aab58f20aa2e9292a36807aa6ead57

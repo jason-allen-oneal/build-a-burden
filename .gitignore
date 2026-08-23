@@ -14,6 +14,7 @@ manifests/**
 !manifests/.gitkeep
 !manifests/approved-sources.jsonl
 !manifests/training-authorizations.jsonl
+!manifests/evaluation-quarantine.json
 *.safetensors
 *.pt
 *.pth
