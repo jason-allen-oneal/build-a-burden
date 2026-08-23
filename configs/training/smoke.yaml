@@ -19,3 +19,5 @@ validation_interval_tokens: 1000000
 checkpoint_interval_tokens: 5000000
 sample_interval_tokens: 1000000
 approval_required: true
+evaluation_quarantine_manifest: manifests/evaluation-quarantine.json
+evaluation_quarantine_manifest_sha256: bffad0b43ff78597cd394a8286fc6e5b37aab58f20aa2e9292a36807aa6ead57

@@ -41,6 +41,7 @@ from .evaluation.fim_completion import (
     model_fim_generator,
 )
 from .evaluation.loss import perplexity
+from .evaluation.quarantine import verify_quarantine
 from .evaluation.runner import evaluate_sources, peak_memory_bytes
 from .model.generation import generate
 from .reproducibility import seed_everything, sha256_file
@@ -100,6 +101,21 @@ def _read_mapping(path: str | Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("configuration root must be a mapping")
     return value
+
+
+def _iter_corpus_texts(path: Path):
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, 1):
+            if not line.strip():
+                continue
+            value = json.loads(line)
+            if not isinstance(value, dict) or not isinstance(value.get("text"), str):
+                raise ValueError(f"invalid corpus document at line {line_number}")
+            record = value.get("record")
+            record_id = record.get("record_id") if isinstance(record, dict) else None
+            if not isinstance(record_id, str) or not record_id:
+                raise ValueError(f"corpus document lacks record_id at line {line_number}")
+            yield record_id, value["text"]
 
 
 def _read_evaluation_config(path: str | Path | None) -> dict[str, Any]:
@@ -723,11 +739,27 @@ def _cmd_train(args) -> int:
         )
 
     source_approval_hash: str | None = None
+    quarantine_path: Path | None = None
+    quarantine_report: dict[str, Any] | None = None
     authorization = None
     if cfg.get("approval_required"):
         source_approval_path = _safe_regular_project_path(root, "manifests/approved-sources.jsonl")
         source_approval_hash = sha256_file(source_approval_path)
         _validate_source_approvals(root, manifest_path)
+        configured_quarantine = cfg.get("evaluation_quarantine_manifest")
+        configured_quarantine_hash = cfg.get("evaluation_quarantine_manifest_sha256")
+        if not isinstance(configured_quarantine, str) or not isinstance(
+            configured_quarantine_hash, str
+        ):
+            raise ValueError("approval-required training requires evaluation quarantine identity")
+        quarantine_path = _safe_regular_project_path(root, configured_quarantine)
+        if sha256_file(quarantine_path) != configured_quarantine_hash:
+            raise ValueError("training evaluation quarantine hash does not match configuration")
+        quarantine_report = verify_quarantine(
+            quarantine_path,
+            project_root=root,
+            corpus=_iter_corpus_texts(corpus_path),
+        )
         max_tokens = int(cfg.get("max_tokens", 0))
         if max_tokens > _EXPLICIT_TRAINING_AUTHORIZATION_THRESHOLD:
             authorization = require_training_authorization(
@@ -755,6 +787,9 @@ def _cmd_train(args) -> int:
         "tokenizer": str(tokenizer_path),
         "tokenizer_sha256": sha256_file(tokenizer_path),
         "source_approval_ledger_sha256": source_approval_hash,
+        "evaluation_quarantine": str(quarantine_path) if quarantine_path else None,
+        "evaluation_quarantine_sha256": (sha256_file(quarantine_path) if quarantine_path else None),
+        "evaluation_quarantine_report": quarantine_report,
         "training_authorization": asdict(authorization) if authorization else None,
         "bundle_verified": False,
     }

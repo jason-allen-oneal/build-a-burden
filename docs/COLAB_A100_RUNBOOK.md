@@ -1,8 +1,10 @@
-# Colab A100 run contract
+# Historical Colab A100 contract
 
-An 80 GB A100 changes the hardware constraint, not the data-policy or
-reproducibility requirements. This runbook is for an approved, single-GPU pilot;
-it does not authorize a paid run or a release of weights.
+This runbook preserves the historical single-GPU contract. It does not authorize a
+paid run, a capability-training run, or a release of weights. The direct-to-1B track
+uses `DIRECT_1B_PLAN.md`. Colab runtime shape is not stable: historical sessions
+recorded an 80 GB A100, while the latest recorded session exposed about 40 GB.
+Always use measured preflight evidence.
 
 ## What fits
 
@@ -26,7 +28,7 @@ the per-step memory footprint.
 
 ## Gates before starting a session
 
-1. Confirm the runtime is actually an A100 80 GB and record the driver, CUDA,
+1. Confirm the actual GPU model and visible VRAM and record the driver, CUDA,
    PyTorch, and GPU memory details in the run directory.
 2. Mount persistent storage before creating a run directory. Colab storage is
    ephemeral; checkpoints and resolved configs must live on Drive or another
@@ -53,11 +55,8 @@ the per-step memory footprint.
   metrics, repetition, and checkpoint hashes. Do not infer usefulness from loss
   alone.
 
-## Recommended order
+## Retired capability sequence
 
-1. Expand and freeze the approved corpus.
-2. Run a short 300M A100 smoke (enough to validate throughput, memory, resume,
-   and evaluation, not enough to claim capability).
-3. Run the 300M pilot against held-out TypeScript tasks.
-4. Only if syntax, compilation, FIM, and memorization gates improve, promote the
-   1.13B configuration for a separately approved run.
+The former 300M-to-1B capability ladder is retired. Existing artifacts remain
+reproducibility evidence. Bounded 1B infrastructure smoke and throughput probes may
+proceed only under `DIRECT_1B_PLAN.md`; they do not constitute capability training.

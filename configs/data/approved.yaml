@@ -41,6 +41,9 @@ sources:
 approval_manifest: manifests/approved-sources.jsonl
 approval_manifest_sha256: 16255e0f6a517b66675788aee6e79f39e780a6330cea7bbd714b1f150e93e765
 require_approval: true
+require_evaluation_quarantine: true
+evaluation_quarantine_manifest: manifests/evaluation-quarantine.json
+evaluation_quarantine_manifest_sha256: bffad0b43ff78597cd394a8286fc6e5b37aab58f20aa2e9292a36807aa6ead57
 acquisition_root: artifacts/sources
 acquisition_timeout_seconds: 180
 # The compiler repository contains a few large checked-in fixtures.  Keep the

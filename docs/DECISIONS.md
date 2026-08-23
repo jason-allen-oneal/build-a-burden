@@ -39,3 +39,12 @@ Add typescript-eslint for parser and static-analysis patterns, TypeORM for typed
 application/data-access code, and Redux Toolkit for modern TypeScript and TSX. Keep
 OpenFable outside the corpus: it is a Python RAG system depending on external LLMs
 and embeddings, not TypeScript base-model training data.
+
+## 2026-08-22 — Direct-to-1B capability track
+
+Do not retrain 100M- or 300M-class capability models. Preserve their existing runs
+as diagnostic evidence and allow only bounded infrastructure smoke tests. The next
+capability candidate is the planning-only 1.13B architecture. Promotion requires a
+frozen evaluation quarantine, a minimum 3-billion-token reviewed corpus, a stable
+tokenizer lineage, a proven distributed trainer, persistent approved compute, and
+an exact run authorization. See `DIRECT_1B_PLAN.md`.

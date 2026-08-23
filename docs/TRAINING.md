@@ -13,16 +13,17 @@ configuration and artifact hashes. Resume restores the exact cursor and RNG stat
 
 Every run records resolved config, environment, Git/dirty state, tokenizer and
 manifest metadata, JSONL metrics, samples, checkpoints, and a report. Before scaling,
-the model must overfit a batch and tiny dataset, resume without cursor drift, and pass
-leakage and KV-cache equivalence tests. The 25M/100M configs require explicit approval;
-the 1B plan is recalculated from observed scaling and approved resources.
+the implementation must overfit a batch and tiny dataset, resume without cursor
+drift, and pass leakage and KV-cache equivalence tests. These are infrastructure
+checks, not authorization to retrain an intermediate capability model. The 1B plan
+is recalculated from measured throughput and approved resources.
 
 ## Execution tiers
 
 The local CPU trainer is the reference correctness path, not the production
-throughput path. Local runs are limited to the 5M development model and a bounded
-25M smoke run. A useful 100M–300M pilot requires a GPU host; the approximately
-1.13B architecture is planning-only until a multi-GPU memory and communication plan
+throughput path. Local development and bounded smoke models may exercise correctness,
+but no new 100M- or 300M-class capability run is planned. The approximately 1.13B
+architecture remains planning-only until a multi-GPU memory and communication plan
 exists. No configuration may infer permission to launch paid or distributed compute
 from its parameter count alone.
 
@@ -34,40 +35,41 @@ test family. The source manifest remains the append-only audit record with
 99,427 records; compiler/fourslash harness records are rejected from the
 training corpus rather than silently treated as ordinary TypeScript. It is a
 pipeline fixture at real-source quality, not a training corpus at pilot scale.
-Before a GPU
-pilot, the data program must add approved TypeScript repositories, preserve
+Before a 1B capability run, the data program must add approved TypeScript
+repositories, preserve
 repository-family and near-duplicate isolation, and publish a token-count and
-license-distribution report. A 300M diagnostic run is blocked below a corpus-sized
-budget of hundreds of millions of distinct tokens; a serious 1.13B run is blocked
-until the corpus and token budget are reviewed together. Repeating the same ~8.9M
+license-distribution report. A serious 1.13B run is blocked until the corpus and
+token budget are reviewed together. Repeating the same ~8.9M
 tokens longer would measure memorization and optimizer behavior, not useful model
 scaling.
 
-The next data gate is a frozen 50–100M-token tranche, not a longer replay of this
-7.38M-token set. The current candidate order is FuelLabs/fuels-ts and
+The direct-to-1B decision retires further 100M- and 300M-class capability training.
+The next corpus milestone is an intake/accounting tranche, not a smaller-model run.
+The 1B candidate remains blocked below a reviewed 3-billion-token floor, with
+continued growth toward a 15–25B-token compute-optimal neighborhood when data and
+compute permit. The current candidate order is FuelLabs/fuels-ts and
 puppeteer/puppeteer, then narrow-scope reviews of Angular and Storybook; VS Code
 remains a later repository-context tranche. Every candidate still requires an exact
 revision, nested-license review, source-scope record, secret scan, harness/generated
-filter report, and split-overlap check. `alainbrown/openfable` is intentionally not
-included: its observed tree is primarily Python, so it is outside the TypeScript
-base-model boundary.
+filter report, evaluation-contamination check, and split-overlap check.
+`alainbrown/openfable` remains outside the TypeScript base-model boundary.
 
-The intended compute sequence is:
+The intended compute sequence is now:
 
 1. **Local reference:** keep the 5M–25M CPU path for correctness, resume, and
    evaluation regressions.
-2. **GPU pilot:** run the planning-only 304M architecture on an approved single
-   GPU (24 GB is the sane starting point; an 80 GB A100 gives ample headroom)
-   after the corpus gate passes. Use a bounded token budget and stop on held-out
-   syntax/compile or repetition failure.
-3. **Serious candidate:** the 1.13B architecture is now memory-feasible on one
-   80 GB A100 with BF16 and activation checkpointing, but its required token budget
-   makes multi-GPU throughput or multiple persistent sessions the practical plan.
-4. **Scale decision:** compare loss, FIM, syntax, compilation, memorization, and
-   throughput against the 100M baseline. Only then decide whether the 1.13B
-   multi-GPU candidate merits compute approval.
+2. **1B infrastructure smoke:** use bounded fixture or tiny approved slices to
+   validate allocation, forward/backward execution, distributed communication,
+   checkpointing, exact resume, and evaluation plumbing. This is not capability
+   training.
+3. **1B throughput probe:** measure the 1.13B architecture on the approved target
+   topology after the distributed trainer exists. Preserve the result without a
+   capability claim.
+4. **1B capability run:** authorize staged pretraining only after the evaluation,
+   corpus, tokenizer, distributed-resume, storage, and compute gates in
+   `DIRECT_1B_PLAN.md` pass.
 
-Before a longer single-GPU run, use
+For historical reproduction only, the bounded single-GPU probe uses
 `configs/training/approved-a100-300m-probe.yaml`. It is an 8,192-token,
 single-microbatch, single-accumulation probe for the 304M architecture with
 CUDA, BF16, streaming input, and all progress callbacks at the same 8,192-token
@@ -75,8 +77,9 @@ boundary. The probe is a wiring and throughput check—not a capability result;
 its short budget cannot establish useful TypeScript completion behavior.
 `validation_max_tokens` bounds each periodic and final validation pass by actual
 input tokens (the A100 probe uses 8,192); it prevents short-file-heavy validation
-splits from turning a smoke run into an unbounded evaluation job. Set it explicitly
-for longer pilots and record the value with the resolved configuration.
+splits from turning a smoke run into an unbounded evaluation job. Record this value
+with any reproduction. The probe is not a prerequisite capability run on the
+direct-to-1B track.
 For streaming runs, `streaming_tokens_per_step_estimate` is a conservative estimate
 of actual (unmasked) tokens consumed per optimizer step. It is used only to derive
 the scheduler horizon and an upper bound on loop steps; attention-mask counts remain

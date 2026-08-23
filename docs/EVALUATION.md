@@ -32,3 +32,17 @@ overlap. A match is evidence to review, not by itself proof of unacceptable
 memorization. Future interfaces cover unit-test pass@k, repository context, imports,
 patch application, API preservation, security tasks, AST equivalence, and IDE
 acceptance. No result is reported as passing unless produced by the harness.
+
+The existing completion and FIM fixtures are held out by
+`manifests/evaluation-quarantine.json`. Approved corpus builds pin that manifest
+and fail before writing artifacts if fixture bytes change or normalized held-out
+prompts, FIM reconstructions, prefixes, or expected middles appear in an included
+corpus record. Token-sequence containment catches ordinary whitespace/minification
+changes. Identifier renaming and semantic clones remain a review risk; this gate does
+not claim AST or semantic equivalence. Verify it independently with:
+
+```bash
+PYTHONPATH=src python -m ts_coder.cli evaluation-quarantine verify \
+  --manifest manifests/evaluation-quarantine.json \
+  --corpus artifacts/corpus/approved/documents.jsonl
+```

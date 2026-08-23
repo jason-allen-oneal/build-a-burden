@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "scope": "held-out-evaluation",
+  "fixtures": [
+    {
+      "id": "completion-v1",
+      "kind": "completion",
+      "path": "fixtures/evaluation/completion-tasks.json",
+      "sha256": "23b214c0997b8ed36913c0cf9f87d07fd6b1636d05ac8023e86ece9e0b9e60ca"
+    },
+    {
+      "id": "fim-v1",
+      "kind": "fim",
+      "path": "fixtures/evaluation/fim-tasks.json",
+      "sha256": "36fe6513dc119940f39999fbf4baa7be66bd90a960333cb13ba87699d17d5fda"
+    }
+  ]
+}

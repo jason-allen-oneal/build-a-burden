@@ -86,12 +86,17 @@ uv run python -m ts_coder.cli tokenizer train \
   --config configs/tokenizer/approved-32k-v2.yaml
 ```
 
-The canonical approved tokenizer is `artifacts/tokenizers/approved-32k-v2`. The
-active full-run 300M and 500M configurations use that path, packed streaming, and a
-versioned v2 shard manifest. Historical smoke, probe, and experiment configurations
-remain unchanged when their recorded hashes depend on older artifacts.
+The canonical approved tokenizer is `artifacts/tokenizers/approved-32k-v2`.
+Historical 300M/500M smoke, probe, and experiment configurations use that path,
+packed streaming, and a versioned v2 shard manifest. They remain unchanged when
+their recorded hashes depend on older artifacts.
 
-Approved training configurations include:
+Historical approved training configurations remain for reproducibility only. The
+project will not retrain 100M- or 300M-class capability models. The next capability
+candidate is the planning-only 1.13B architecture; bounded smaller runs are allowed
+only for infrastructure correctness. See `docs/DIRECT_1B_PLAN.md`.
+
+Recorded historical configurations include:
 
 ```text
 configs/training/approved-a100-300m-smoke.yaml
