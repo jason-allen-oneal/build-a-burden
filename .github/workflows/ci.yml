@@ -21,7 +21,7 @@ jobs:
           tracked_generated="$({
             git ls-files |
               grep -P '(^artifacts/(?!\.gitkeep$)|^manifests/(?!\.gitkeep$)|(^|/)(node_modules|dist)/)' |
-              grep -v -E '^manifests/(approved-sources|training-authorizations)\.jsonl$'
+              grep -v -E '^manifests/((approved-sources|training-authorizations)\.jsonl|evaluation-quarantine\.json)$'
           } || true)"
           if [[ -n "$tracked_generated" ]]; then
             printf '%s\n' "$tracked_generated"
